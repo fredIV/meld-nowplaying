@@ -1,0 +1,299 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Now Playing</title>
+<style>
+  /* ---- tweak everything here ---------------------------------- */
+  :root {
+    --w: 380px;            /* overall width                        */
+    --art: 56px;           /* album art size                       */
+    --pad: 10px;
+    --gap: 10px;
+    --radius: 10px;
+    --art-radius: 6px;
+    --bg: rgba(12,12,14,.72);
+    --title: #ffffff;
+    --artist: rgba(255,255,255,.62);
+    --album: rgba(255,255,255,.40);
+    --bar-bg: rgba(255,255,255,.16);
+    --bar-fill: #1db954;
+    --font: "Gotham", "Segoe UI", system-ui, sans-serif;
+    --title-size: 15px;
+    --artist-size: 12.5px;
+    --shadow: 0 6px 24px rgba(0,0,0,.45);
+    --blur: 10px;          /* frosted glass; 0 disables            */
+    --art-bg-opacity: .38; /* blurred album art behind the card    */
+  }
+
+  /* per-layout overrides -- set "layout" in config.json */
+  body[data-layout="card"] {
+    --w: 420px; --art: 96px; --pad: 14px; --gap: 14px;
+    --title-size: 17px; --artist-size: 13.5px; --radius: 14px;
+  }
+  body[data-layout="text"] {
+    --w: 480px; --pad: 8px; --bg: rgba(12,12,14,.55);
+  }
+  body[data-layout="vertical"] {
+    --w: 240px; --art: 200px; --pad: 14px; --gap: 12px;
+    --title-size: 16px; --artist-size: 13px; --radius: 14px;
+  }
+  /* -------------------------------------------------------------- */
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body {
+    background: transparent;
+    font-family: var(--font);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #card {
+    position: relative;
+    width: var(--w);
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    padding: var(--pad);
+    background: var(--bg);
+    backdrop-filter: blur(var(--blur));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+    transition: opacity .35s ease, transform .35s ease,
+                width .45s cubic-bezier(.2,.8,.2,1);
+  }
+  #card.show { opacity: 1; transform: none; }
+
+  /* blurred album art behind everything */
+  #bg {
+    position: absolute; inset: -30%;
+    background-size: cover; background-position: center;
+    filter: blur(28px) saturate(1.4);
+    opacity: 0;
+    transition: opacity .6s ease;
+    pointer-events: none;
+  }
+  body.art-bg #bg.on { opacity: var(--art-bg-opacity); }
+
+  #art, #meta { position: relative; }
+
+  #art {
+    width: var(--art);
+    height: var(--art);
+    flex: 0 0 auto;
+    border-radius: var(--art-radius);
+    object-fit: cover;
+    background: rgba(255,255,255,.06);
+    transition: width .45s cubic-bezier(.2,.8,.2,1),
+                height .45s cubic-bezier(.2,.8,.2,1);
+  }
+  #art.empty { display: none; }
+
+  #meta { flex: 1 1 auto; min-width: 0; }
+
+  .line { position: relative; overflow: hidden; white-space: nowrap; }
+  .line > span { display: inline-block; }
+
+  #title  { color: var(--title);  font-size: var(--title-size);  font-weight: 600; letter-spacing: .1px; }
+  #artist { color: var(--artist); font-size: var(--artist-size); margin-top: 2px; }
+  #album  { color: var(--album);  font-size: calc(var(--artist-size) - 1px);
+            margin-top: 2px; max-height: 0; opacity: 0; overflow: hidden;
+            transition: max-height .35s ease, opacity .35s ease; }
+
+  .line.scroll > span { animation: marquee var(--dur,12s) linear infinite; padding-right: 40px; }
+  .line.scroll > span::after { content: attr(data-text); padding-left: 40px; }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  #bar {
+    position: relative;
+    margin-top: 7px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--bar-bg);
+    overflow: hidden;
+  }
+  #fill {
+    height: 100%; width: 0%;
+    background: var(--bar-fill);
+    border-radius: 2px;
+    transition: width .25s linear;
+  }
+  #times {
+    position: relative;
+    display: none;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 11px;
+    color: var(--album);
+    font-variant-numeric: tabular-nums;
+  }
+  body.no-bar #bar, body.no-bar #times { display: none; }
+
+  /* ---- text layout: one line, no art, no bar ---- */
+  body[data-layout="text"] #art,
+  body[data-layout="text"] #bar,
+  body[data-layout="text"] #artist,
+  body[data-layout="text"] #times { display: none; }
+
+  /* ---- card layout: show album + timestamps ---- */
+  body[data-layout="card"] #album { max-height: 20px; opacity: 1; }
+  body[data-layout="card"] #times { display: flex; }
+
+  /* ---- vertical layout: stacked, centred ---- */
+  body[data-layout="vertical"] #card { flex-direction: column; align-items: stretch; }
+  body[data-layout="vertical"] #art { width: 100%; height: var(--art); }
+  body[data-layout="vertical"] #title,
+  body[data-layout="vertical"] #artist { text-align: center; }
+
+  /* ---- pop-in: briefly expand on a new track, then settle ---- */
+  #card.popin { --art: var(--popin-art, 96px); }
+  #card.popin #album { max-height: 20px; opacity: 1; }
+  #card.popin #times { display: flex; }
+  body[data-layout="vertical"] #card.popin { --art: var(--art); }
+</style>
+</head>
+<body>
+
+<div id="card">
+  <div id="bg"></div>
+  <img id="art" class="empty" alt="">
+  <div id="meta">
+    <div class="line" id="title"><span></span></div>
+    <div class="line" id="artist"><span></span></div>
+    <div class="line" id="album"><span></span></div>
+    <div id="bar"><div id="fill"></div></div>
+    <div id="times"><span id="tnow">0:00</span><span id="tend">0:00</span></div>
+  </div>
+</div>
+
+<script>
+const card   = document.getElementById('card');
+const bg     = document.getElementById('bg');
+const artEl  = document.getElementById('art');
+const titleL = document.getElementById('title');
+const artistL= document.getElementById('artist');
+const albumL = document.getElementById('album');
+const fill   = document.getElementById('fill');
+const tNow   = document.getElementById('tnow');
+const tEnd   = document.getElementById('tend');
+
+let state = null, recvAt = 0, lastKey = null, popinTimer = null;
+let CFG = { layout: 'bar', popin_seconds: 6, blurred_art_background: true };
+
+fetch('/config')
+  .then(r => r.json())
+  .then(c => { CFG = Object.assign(CFG, c); applyConfig(); })
+  .catch(() => applyConfig())
+  .finally(connect);
+
+function applyConfig() {
+  // ?layout=card / ?popin=0 / ?artbg=0 override config.json, so several Meld
+  // layers can share one server with different looks
+  const q = new URLSearchParams(location.search);
+  if (q.has('layout')) CFG.layout = q.get('layout');
+  if (q.has('popin'))  CFG.popin_seconds = parseFloat(q.get('popin')) || 0;
+  if (q.has('artbg'))  CFG.blurred_art_background = q.get('artbg') !== '0';
+
+  document.body.dataset.layout = CFG.layout || 'bar';
+  document.body.classList.toggle('art-bg', !!CFG.blurred_art_background);
+}
+
+function mmss(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function setLine(lineEl, text) {
+  const span = lineEl.firstElementChild;
+  if (span.textContent === text) return;
+  span.textContent = text;
+  span.dataset.text = text;
+  lineEl.classList.remove('scroll');
+  requestAnimationFrame(() => {
+    if (span.scrollWidth > lineEl.clientWidth + 2) {
+      lineEl.style.setProperty('--dur', Math.max(8, span.scrollWidth / 22) + 's');
+      lineEl.classList.add('scroll');
+    }
+  });
+}
+
+function render(s) {
+  const has = s && s.title;
+  card.classList.toggle('show', !!has);
+  if (!has) { lastKey = null; return; }
+
+  const key = s.title + '|' + s.artist;
+  const isNew = key !== lastKey;
+  lastKey = key;
+
+  if (CFG.layout === 'text') {
+    setLine(titleL, s.artist ? (s.title + '  —  ' + s.artist) : s.title);
+  } else {
+    setLine(titleL, s.title);
+    setLine(artistL, s.artist || '');
+    setLine(albumL, s.album || '');
+  }
+
+  if (s.art) {
+    if (artEl.getAttribute('src') !== s.art) artEl.setAttribute('src', s.art);
+    artEl.classList.remove('empty');
+    bg.style.backgroundImage = 'url("' + s.art + '")';
+    bg.classList.add('on');
+  } else {
+    artEl.classList.add('empty');
+    bg.classList.remove('on');
+  }
+
+  document.body.classList.toggle('no-bar', !s.duration);
+  if (s.duration) tEnd.textContent = mmss(s.duration);
+
+  // pop-in: expand for a few seconds when a new track starts
+  if (isNew && CFG.popin_seconds > 0 && CFG.layout !== 'text') {
+    card.classList.add('popin');
+    clearTimeout(popinTimer);
+    popinTimer = setTimeout(() => card.classList.remove('popin'),
+                            CFG.popin_seconds * 1000);
+  }
+}
+
+artEl.addEventListener('error', () => {
+  artEl.classList.add('empty');
+  bg.classList.remove('on');
+});
+
+function tick() {
+  if (state && state.duration) {
+    let pos = state.position;
+    if (state.playing) pos += (Date.now() / 1000) - recvAt;
+    pos = Math.min(pos, state.duration);
+    fill.style.width = ((pos / state.duration) * 100).toFixed(2) + '%';
+    tNow.textContent = mmss(pos);
+  }
+  requestAnimationFrame(tick);
+}
+tick();
+
+function connect() {
+  const es = new EventSource('/events');
+  es.onmessage = (ev) => {
+    try {
+      state = JSON.parse(ev.data);
+      recvAt = Date.now() / 1000;
+      render(state);
+    } catch (_) {}
+  };
+  es.onerror = () => {
+    es.close();
+    card.classList.remove('show');
+    setTimeout(connect, 2000);
+  };
+}
+</script>
+</body>
+</html>

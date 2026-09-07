@@ -1,0 +1,20 @@
+{
+  "port": 8752,
+  "poll_interval": 0.5,
+  "source_filter": "spotify",
+  "hide_when_paused": false,
+  "layout": "bar",
+  "popin_seconds": 6,
+  "blurred_art_background": true,
+  "write_text_file": true,
+  "text_file_format": "{title} - {artist}",
+  "meld": {
+    "enabled": true,
+    "url": "ws://127.0.0.1:13376",
+    "layer_name": "Now Playing",
+    "auto_set_url": true,
+    "hide_between_songs": false,
+    "mute_aware_track": "",
+    "stream_event_on_track_change": null
+  }
+}
