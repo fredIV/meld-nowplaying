@@ -52,7 +52,15 @@ Everything is configurable at <http://127.0.0.1:8752/settings> — layout, pop-i
 album-art background, which player to follow, the output files and the Meld link.
 Display settings apply as soon as you save.
 
-If you would rather edit a file, it is all in `config.json` next to the executable.
+If you would rather edit a file, it is all in `config.json` next to the executable —
+`config.example.json` in the repo lists every key with its default.
+
+### Starting and stopping with Meld
+
+Set `exit_with_meld` to `true` and the overlay shuts itself down when Meld Studio closes
+instead of sitting in the background. Pair that with a small launcher that starts the
+overlay and then opens Meld, and the two come and go together — pin the launcher in
+place of your Meld shortcut.
 
 ## Layouts
 
