@@ -16,5 +16,7 @@
     "hide_between_songs": false,
     "mute_aware_track": "",
     "stream_event_on_track_change": null
-  }
+  },
+  "exit_with_meld": false,
+  "meld_process": "MeldStudio.exe"
 }

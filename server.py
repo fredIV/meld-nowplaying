@@ -59,6 +59,9 @@ DEFAULTS = {
     "write_text_file": True,
     "text_file_format": "{title} - {artist}",
 
+    "exit_with_meld": False,          # quit once Meld Studio closes
+    "meld_process": "MeldStudio.exe",
+
     "meld": {},
 }
 
@@ -461,6 +464,62 @@ class Handler(BaseHTTPRequestHandler):
                     _clients.remove(q)
 
 
+def process_running(exe_name):
+    """True/False if we could look, None if the check itself failed."""
+    import ctypes
+    import ctypes.wintypes as wintypes
+
+    class PROCESSENTRY32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+            ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_wchar * 260),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+    snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+    if snapshot == -1:
+        return None
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(entry)
+        wanted = exe_name.lower()
+        found = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while found:
+            if entry.szExeFile.lower() == wanted:
+                return True
+            found = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        return False
+    except Exception:
+        return None
+    finally:
+        kernel32.CloseHandle(snapshot)
+
+
+def watch_meld():
+    """Shut down when Meld Studio does - for launchers that start the pair."""
+    name = CONFIG.get("meld_process") or "MeldStudio.exe"
+    seen = False
+    misses = 0
+    while True:
+        time.sleep(3)
+        running = process_running(name)
+        if running is None:
+            continue
+        if running:
+            seen, misses = True, 0
+        elif seen:
+            # two misses in a row, so a momentary hiccup does not kill us
+            misses += 1
+            if misses >= 2:
+                print(f"[info] {name} closed - shutting down")
+                os._exit(0)
+
+
 def stop_previous_instance(port):
     """A second launch replaces the first instead of failing to bind."""
     import urllib.request
@@ -479,10 +538,15 @@ def main():
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
+    if CONFIG.get("exit_with_meld"):
+        threading.Thread(target=watch_meld, daemon=True).start()
+
     print("meld-spotify running")
     print(f"  overlay : http://127.0.0.1:{port}/")
     print(f"  state   : http://127.0.0.1:{port}/state")
     print(f"  source  : {CONFIG['source_filter'] or '(any player)'}")
+    if CONFIG.get("exit_with_meld"):
+        print(f"  quits   : when {CONFIG.get('meld_process')} closes")
     print("Paste the overlay URL into a Meld Studio Web layer. Ctrl+C to stop.")
 
     global _link
