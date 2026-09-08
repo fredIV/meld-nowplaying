@@ -25,6 +25,9 @@ echo Building meld-nowplaying.exe ...
   --add-data "settings.html;." ^
   --collect-all winrt ^
   --hidden-import websockets ^
+  --exclude-module tkinter --exclude-module unittest --exclude-module pydoc ^
+  --exclude-module doctest --exclude-module lib2to3 --exclude-module pdb ^
+  --exclude-module xmlrpc --exclude-module sqlite3 --exclude-module distutils ^
   server.py || (echo Build failed. & pause & exit /b 1)
 
 echo.
