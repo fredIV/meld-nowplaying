@@ -31,6 +31,21 @@ the packages it needs, after that it just starts.
 
 </details>
 
+## Why does Windows warn about this?
+
+The executable isn't code signed, so SmartScreen shows *"Windows protected your PC"* the
+first time you run it. Click **More info → Run anyway**.
+
+Signing certificates cost money a free tool doesn't have, and since 2024 they don't skip
+the warning anyway — Windows builds trust from download history, not from the
+certificate alone. Nothing here is doing anything unusual: it reads the media session
+Windows already exposes and serves a web page on `127.0.0.1`. No network access, no
+telemetry, no installer.
+
+If you'd rather not click through the warning, run it from source with `start.bat` —
+same program, no download prompt. The whole thing is a few hundred lines of Python and
+one HTML file, all in this repo.
+
 ## Settings
 
 Everything is configurable at <http://127.0.0.1:8752/settings> — layout, pop-in,
