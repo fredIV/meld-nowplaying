@@ -1,3 +1,4 @@
 @echo off
-taskkill /f /im pythonw.exe >nul 2>&1
-echo Overlay server stopped.
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0stop.ps1"
+timeout /t 2 >nul

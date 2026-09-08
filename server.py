@@ -36,8 +36,15 @@ except ImportError:
 sys.dont_write_bytecode = True
 
 from meld_link import MeldLink
+from install_link import build as build_install_link
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Frozen with PyInstaller the pages travel inside the executable, while
+# config and the output files belong next to it where people can see them.
+if getattr(sys, "frozen", False):
+    ASSETS = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    HERE = os.path.dirname(sys.executable)
+else:
+    ASSETS = HERE = os.path.dirname(os.path.abspath(__file__))
 
 DEFAULTS = {
     "port": 8752,
@@ -290,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path in ("/", "/overlay", "/index.html"):
             try:
-                with open(os.path.join(HERE, "overlay.html"), "rb") as fh:
+                with open(os.path.join(ASSETS, "overlay.html"), "rb") as fh:
                     body = fh.read()
             except OSError:
                 self._send(404, "text/plain", b"overlay.html not found")
@@ -323,8 +330,46 @@ class Handler(BaseHTTPRequestHandler):
                     link and link._find("layer",
                                         (CONFIG.get("meld") or {}).get("layer_name"))[0]),
             }
+            wanted = None
+            if "?" in self.path:
+                from urllib.parse import parse_qs
+                wanted = parse_qs(self.path.split("?", 1)[1]).get("layer", [None])[0]
+            if wanted and link:
+                item_id, item = link._find("layer", wanted)
+                body["layer_id"] = item_id
+                body["layer"] = item
             self._send(200, "application/json",
                        json.dumps(body, indent=2).encode("utf-8"))
+
+        elif path == "/quit":
+            self._send(200, "text/plain", b"stopping")
+            threading.Thread(target=lambda: (time.sleep(0.3), os._exit(0)),
+                             daemon=True).start()
+
+        elif path == "/settings":
+            try:
+                with open(os.path.join(ASSETS, "settings.html"), "rb") as fh:
+                    page = fh.read()
+            except OSError:
+                self._send(404, "text/plain", b"settings.html not found")
+                return
+            self._send(200, "text/html; charset=utf-8", page)
+
+        elif path == "/api/install-link":
+            from urllib.parse import parse_qs
+            query = parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            layout = (query.get("layout") or [CONFIG.get("layout", "bar")])[0]
+            name = (query.get("name")
+                    or [(CONFIG.get("meld") or {}).get("layer_name") or "Now Playing"])[0]
+            link = build_install_link(int(CONFIG["port"]), layout, name)
+            self._send(200, "application/json",
+                       json.dumps({"link": link, "layout": layout,
+                                   "name": name}).encode("utf-8"))
+
+        elif path == "/api/config":
+            with _lock:
+                body = json.dumps(CONFIG, indent=2).encode("utf-8")
+            self._send(200, "application/json", body)
 
         elif path == "/config":
             body = json.dumps({
@@ -339,6 +384,51 @@ class Handler(BaseHTTPRequestHandler):
 
         else:
             self._send(404, "text/plain", b"not found")
+
+    def do_POST(self):
+        if self.path.split("?", 1)[0] != "/api/config":
+            self._send(404, "text/plain", b"not found")
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            incoming = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(incoming, dict):
+                raise ValueError("expected an object")
+        except Exception as exc:
+            self._send(400, "application/json",
+                       json.dumps({"error": str(exc)}).encode("utf-8"))
+            return
+
+        with _lock:
+            merged = dict(CONFIG)
+            for key, value in incoming.items():
+                if key == "meld" and isinstance(value, dict):
+                    meld = dict(merged.get("meld") or {})
+                    meld.update(value)
+                    merged["meld"] = meld
+                else:
+                    merged[key] = value
+            CONFIG.clear()
+            CONFIG.update(merged)
+            snapshot = dict(CONFIG)
+
+        try:
+            path = os.path.join(HERE, "config.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as fh:
+                json.dump(snapshot, fh, indent=2)
+                fh.write("\n")
+            os.replace(path + ".tmp", path)
+        except OSError as exc:
+            self._send(500, "application/json",
+                       json.dumps({"error": str(exc)}).encode("utf-8"))
+            return
+
+        # push the new state so open overlays pick up display changes at once
+        with _lock:
+            payload = dict(_state)
+        broadcast(payload)
+        self._send(200, "application/json",
+                   json.dumps({"ok": True}).encode("utf-8"))
 
     def stream_events(self):
         q = queue.Queue(maxsize=32)
@@ -371,8 +461,20 @@ class Handler(BaseHTTPRequestHandler):
                     _clients.remove(q)
 
 
+def stop_previous_instance(port):
+    """A second launch replaces the first instead of failing to bind."""
+    import urllib.request
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/quit", timeout=1.5).read()
+        print("[info] stopped the previous instance")
+        time.sleep(1.2)
+    except Exception:
+        pass
+
+
 def main():
     port = int(CONFIG["port"])
+    stop_previous_instance(port)
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()

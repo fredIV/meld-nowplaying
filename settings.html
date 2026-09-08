@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>meld-spotify settings</title>
+<style>
+  :root {
+    --bg: #0e0f12; --card: #16181d; --line: #23262d;
+    --fg: #eceef2; --dim: #9aa1ad; --accent: #1db954; --warn: #e0a33e;
+    --font: "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font);
+         font-size: 14px; line-height: 1.5; }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 16px 18px; margin-bottom: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--dim); margin: 0 0 12px; font-weight: 600; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+  .row label { flex: 1 1 auto; }
+  .row .hint { display: block; color: var(--dim); font-size: 12px; }
+  input[type=text], input[type=number], select {
+    background: #0f1115; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 9px; font: inherit; font-size: 13px;
+    min-width: 190px;
+  }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .bar { position: sticky; bottom: 0; background: linear-gradient(transparent, var(--bg) 30%);
+         padding: 18px 0 4px; display: flex; align-items: center; gap: 12px; }
+  button { background: var(--accent); color: #04210f; border: 0; border-radius: 7px;
+           padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: #22252c; color: var(--fg); font-weight: 500; }
+  a.btnlink { background: #22252c; color: var(--fg); border-radius: 7px;
+              padding: 8px 14px; text-decoration: none; font-size: 13px;
+              white-space: nowrap; }
+  a.btnlink:hover { background: #2b2f38; }
+  a { color: var(--accent); }
+  #msg { color: var(--dim); }
+  #msg.warn { color: var(--warn); }
+  .status { display: flex; gap: 8px; align-items: baseline; color: var(--dim); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; }
+  .dot.on { background: var(--accent); }
+  code { background: #0f1115; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Now playing overlay</h1>
+  <p class="sub">Settings apply immediately. Changes under <em>Meld link</em> need a restart.</p>
+
+  <div class="card">
+    <h2>Overlay</h2>
+    <div class="row">
+      <label>Layout<span class="hint">bar 380&times;90 &middot; card 420&times;140 &middot; text 480&times;40 &middot; vertical 240&times;320</span></label>
+      <select id="layout">
+        <option value="bar">bar</option>
+        <option value="card">card</option>
+        <option value="text">text</option>
+        <option value="vertical">vertical</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Pop-in on track change<span class="hint">seconds the card stays expanded; 0 turns it off</span></label>
+      <input type="number" id="popin_seconds" min="0" max="60" step="1">
+    </div>
+    <div class="row">
+      <label>Blurred album art behind the card</label>
+      <input type="checkbox" id="blurred_art_background">
+    </div>
+    <div class="row">
+      <label>Hide while paused</label>
+      <input type="checkbox" id="hide_when_paused">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Player</h2>
+    <div class="row">
+      <label>Only follow this player<span class="hint">matches the app id; leave empty for whatever is playing</span></label>
+      <input type="text" id="source_filter" placeholder="spotify">
+    </div>
+    <div class="row">
+      <label>Poll interval<span class="hint">seconds between reads</span></label>
+      <input type="number" id="poll_interval" min="0.1" max="10" step="0.1">
+    </div>
+    <div class="row">
+      <label>Now playing<span class="hint" id="now">&mdash;</span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Files for other tools</h2>
+    <div class="row">
+      <label>Write <code>nowplaying.txt</code>, <code>.json</code> and <code>art.png</code></label>
+      <input type="checkbox" id="write_text_file">
+    </div>
+    <div class="row">
+      <label>Text format<span class="hint">tokens: {title} {artist} {album}</span></label>
+      <input type="text" id="text_file_format">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Meld link</h2>
+    <div class="status" style="margin-bottom:10px">
+      <span class="dot" id="dot"></span><span id="linkstate">checking&hellip;</span>
+    </div>
+    <div class="row">
+      <label>Control Meld directly<span class="hint">needs <em>Allow remote connections</em> in Meld &rarr; Preferences &rarr; Advanced, and a Meld restart</span></label>
+      <input type="checkbox" id="meld_enabled">
+    </div>
+    <div class="row">
+      <label>Layer name<span class="hint">the web layer in Meld this controls</span></label>
+      <input type="text" id="meld_layer_name">
+    </div>
+    <div class="row">
+      <label>Point that layer at the overlay automatically</label>
+      <input type="checkbox" id="meld_auto_set_url">
+    </div>
+    <div class="row">
+      <label>Hide the layer between songs</label>
+      <input type="checkbox" id="meld_hide_between_songs">
+    </div>
+    <div class="row">
+      <label>Hide while this audio track is muted<span class="hint">Meld mixer track name; empty to ignore</span></label>
+      <input type="text" id="meld_mute_aware_track">
+    </div>
+    <div class="row">
+      <label>Add the layer to Meld<span class="hint">creates a browser layer, already named, sized and pointed at the overlay</span></label>
+      <a class="btnlink" id="addlink" href="#">Add to Meld</a>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="save">Save</button>
+    <button class="ghost" onclick="window.open('/','_blank')">Preview overlay</button>
+    <span id="msg"></span>
+  </div>
+</div>
+
+<script>
+const F = ['layout','popin_seconds','blurred_art_background','hide_when_paused',
+           'source_filter','poll_interval','write_text_file','text_file_format'];
+const M = ['enabled','layer_name','auto_set_url','hide_between_songs','mute_aware_track'];
+const el = (id) => document.getElementById(id);
+
+function put(node, value) {
+  if (node.type === 'checkbox') node.checked = !!value;
+  else node.value = value ?? '';
+}
+function take(node) {
+  if (node.type === 'checkbox') return node.checked;
+  if (node.type === 'number') return parseFloat(node.value);
+  return node.value;
+}
+
+async function load() {
+  const cfg = await fetch('/api/config').then(r => r.json());
+  F.forEach(k => put(el(k), cfg[k]));
+  M.forEach(k => put(el('meld_' + k), (cfg.meld || {})[k]));
+}
+
+async function save() {
+  const body = {};
+  F.forEach(k => body[k] = take(el(k)));
+  body.meld = {};
+  M.forEach(k => body.meld[k] = take(el('meld_' + k)));
+  const msg = el('msg');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    msg.className = '';
+    msg.textContent = 'Saved. Reload any open overlay to see display changes.';
+  } catch (e) {
+    msg.className = 'warn';
+    msg.textContent = 'Could not save: ' + e.message;
+  }
+  setTimeout(() => { el('msg').textContent = ''; }, 6000);
+}
+
+async function poll() {
+  try {
+    const [d, s] = await Promise.all([
+      fetch('/diag').then(r => r.json()),
+      fetch('/state').then(r => r.json())
+    ]);
+    el('dot').className = 'dot' + (d.meld_linked ? ' on' : '');
+    el('linkstate').textContent = !d.meld_enabled
+      ? 'off'
+      : d.meld_linked
+        ? `connected — layer "${d.meld_layer}" ${d.meld_layer_found ? 'found' : 'not found yet'}`
+        : 'not connected to Meld';
+    el('now').textContent = s.title
+      ? `${s.title} — ${s.artist || ''}`.trim()
+      : 'nothing playing';
+  } catch (_) {}
+}
+
+async function refreshInstallLink() {
+  const q = new URLSearchParams({
+    layout: el('layout').value,
+    name: el('meld_layer_name').value || 'Now Playing'
+  });
+  try {
+    const { link } = await fetch('/api/install-link?' + q).then(r => r.json());
+    el('addlink').setAttribute('href', link);
+  } catch (_) {}
+}
+['layout', 'meld_layer_name'].forEach(id =>
+  el(id).addEventListener('change', refreshInstallLink));
+
+el('save').addEventListener('click', save);
+load().then(refreshInstallLink);
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

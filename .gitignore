@@ -1,6 +1,9 @@
 .venv/
 __pycache__/
 *.pyc
+build/
+dist/
+*.spec
 nowplaying.txt
 nowplaying.json
 art.png
