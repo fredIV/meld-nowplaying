@@ -76,7 +76,9 @@ class MeldLink:
         backoff = 2
         while True:
             try:
+                self._dbg(f"connecting to {url}")
                 async with websockets.connect(url, max_size=None) as ws:
+                    self._dbg("socket open")
                     self.ws = ws
                     self._connected_note = False
                     self._layer_url_set = False
@@ -88,6 +90,11 @@ class MeldLink:
                         backoff = 2
                         await reader
                     finally:
+                        if reader.done() and not reader.cancelled():
+                            exc = reader.exception()
+                            if exc is not None and not self._warned:
+                                self._warned = True
+                                self.log(f"[meld] reader error: {exc!r}")
                         reader.cancel()
             except Exception as exc:
                 if self._connected_note or not self._warned:
@@ -100,6 +107,10 @@ class MeldLink:
             backoff = min(backoff * 2, 30)
 
     # ------------------------------------------------------------- protocol
+
+    def _dbg(self, msg):
+        if self.cfg.get("debug"):
+            self.log(f"[meld:debug] {msg}")
 
     async def _send(self, msg):
         await self.ws.send(json.dumps(msg))
@@ -126,7 +137,9 @@ class MeldLink:
         fut = asyncio.get_event_loop().create_future()
         self._pending[mid] = fut
         await self._send({"type": INIT, "id": mid})
+        self._dbg(f"init sent (id={mid}), waiting for reply")
         data = await asyncio.wait_for(fut, timeout=10)
+        self._dbg(f"init reply keys: {sorted((data or {}).keys())}")
         self._ingest_objects(data or {})
         await self._send({"type": IDLE})
 
@@ -136,12 +149,20 @@ class MeldLink:
                 await self._send({"type": CONNECT_TO_SIGNAL,
                                   "object": OBJECT, "signal": idx})
 
+        if "setClientName" in self._methods:
+            await self._call("setClientName", ["meld-spotify"])
+
         self._connected_note = True
         self.log(f"[meld] linked ({len(self._methods)} methods)")
         await self._apply()
 
     def _ingest_objects(self, data):
+        if not isinstance(data, dict):
+            self._dbg(f"unexpected init payload: {type(data).__name__}")
+            return
         obj = data.get(OBJECT) or {}
+        if not isinstance(obj, dict):
+            return
         for entry in obj.get("methods", []):
             try:
                 self._methods[entry[0]] = entry[1]
@@ -161,37 +182,75 @@ class MeldLink:
                 pass
 
     async def _read_loop(self):
-        async for raw in self.ws:
+        while True:
+            try:
+                raw = await self.ws.recv()
+            except Exception as exc:
+                if self._connected_note:
+                    self.log(f"[meld] reader stopped: {type(exc).__name__}")
+                return
             try:
                 msg = json.loads(raw)
             except ValueError:
                 continue
+            if not isinstance(msg, dict):
+                # Meld sends the odd bare JSON string; not for us
+                continue
             mtype = msg.get("type")
+            self._dbg(f"recv type={mtype} keys={sorted(msg.keys())} "
+                      f"id={msg.get('id')}")
+            try:
+                await self._dispatch(mtype, msg)
+            except Exception as exc:
+                self._dbg(f"message handling failed: {exc!r}")
+            continue
 
-            if mtype == RESPONSE:
-                fut = self._pending.pop(msg.get("id"), None)
-                if fut and not fut.done():
+    async def _dispatch(self, mtype, msg):
+        # Meld answers a request with the request's id but not always with
+        # the message type Qt documents, so the id is what we trust first.
+        mid = msg.get("id")
+        if mid is not None and mid in self._pending:
+            fut = self._pending.pop(mid)
+            if not fut.done():
+                fut.set_result(msg.get("data"))
+            return
+
+        if mtype == RESPONSE or (mtype is None and "data" in msg):
+            if self._pending:
+                fut = self._pending.pop(sorted(self._pending)[0])
+                if not fut.done():
                     fut.set_result(msg.get("data"))
 
-            elif mtype == PROPERTY_UPDATE:
-                for entry in msg.get("data", []):
-                    for idx, value in (entry.get("properties") or {}).items():
-                        try:
-                            name = self._props.get(int(idx))
-                        except (TypeError, ValueError):
-                            name = None
-                        if name == "session":
-                            self._session = value or {}
-                            self._layer_url_set = False
-                            await self._apply()
+        elif mtype == PROPERTY_UPDATE:
+            entries = msg.get("data")
+            if isinstance(entries, dict):
+                entries = [entries]
+            for entry in entries or []:
+                if not isinstance(entry, dict):
+                    continue
+                props = entry.get("properties")
+                if not isinstance(props, dict):
+                    continue
+                for idx, value in props.items():
+                    try:
+                        name = self._props.get(int(idx))
+                    except (TypeError, ValueError):
+                        name = idx if isinstance(idx, str) else None
+                    if name == "session":
+                        self._session = value or {}
+                        self._layer_url_set = False
+                        await self._apply()
 
-            elif mtype == SIGNAL:
-                sig = msg.get("signal")
-                args = msg.get("args") or []
+        elif mtype == SIGNAL:
+            sig = msg.get("signal")
+            args = msg.get("args") or []
+            try:
                 if sig == self._signals.get("gainUpdated"):
                     await self._on_gain(args)
                 elif sig == self._signals.get("sessionChanged"):
                     await self._refresh_session()
+            except Exception as exc:
+                self._dbg(f"signal handling failed: {exc!r}")
 
     async def _refresh_session(self):
         self._id += 1

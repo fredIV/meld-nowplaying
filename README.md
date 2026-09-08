@@ -70,8 +70,17 @@ Empty file = nothing playing.
 
 ## Meld WebChannel link (optional)
 
-Meld exposes a control API at `ws://127.0.0.1:13376`. Turn this on in the
-`meld` block of `config.json` and the server will drive Meld directly:
+Meld exposes a control API at `ws://127.0.0.1:13376`. **Two things have to be
+true before anything can connect:**
+
+1. In Meld: *Preferences → Advanced → WebSocket Server → Allow remote
+   connections* must be **on**. Despite the name, nothing can reach the API
+   locally until this is enabled.
+2. **Restart Meld after enabling it.** The socket only starts listening on the
+   next launch.
+
+Then turn the link on in the `meld` block of `config.json` and the server will
+drive Meld directly:
 
 ```json
 "meld": {
@@ -114,6 +123,7 @@ Long titles scroll automatically. The card fades out when nothing is playing.
 | `/state` | current state as JSON |
 | `/config` | display settings the overlay reads at load |
 | `/art` | album art bytes for the current track |
+| `/diag` | Meld link status: connected, methods, session size, layer found |
 
 ## Troubleshooting
 
@@ -130,7 +140,10 @@ substring in `source_filter`. The Store build of Spotify reports something like
 **No album art.** Some players don't publish a thumbnail. The overlay drops the
 art and shows text only.
 
-**Meld link never connects.** Meld has to be running, and the console prints one
-line saying why if it can't link. The layer name must match `layer_name` exactly.
+**Meld link never connects.** Check the two prerequisites above first — the
+"Allow remote connections" toggle *and* a Meld restart. Then open
+<http://127.0.0.1:8752/diag>: it reports whether the link is up, how many
+session items it can see, and whether your `layer_name` was found. The layer
+name must match exactly.
 
 **Port already in use.** Change `port` in `config.json` and update the layer URL.

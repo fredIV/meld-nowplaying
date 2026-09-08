@@ -31,6 +31,10 @@ except ImportError:
         "(or just double-click start.bat, which does it for you)"
     )
 
+# the project folder can live on a mount whose timestamps confuse
+# Python's bytecode cache, which silently keeps stale imports alive
+sys.dont_write_bytecode = True
+
 from meld_link import MeldLink
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -72,6 +76,7 @@ _lock = threading.Lock()
 _state = {"playing": False, "title": "", "artist": "", "album": "", "app": "",
           "position": 0.0, "duration": 0.0, "at": 0.0, "art": None}
 _art_bytes = None
+_link = None
 _clients = []
 _clients_lock = threading.Lock()
 
@@ -306,6 +311,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, image_kind(data)[1], data,
                            {"Cache-Control": "public, max-age=3600"})
 
+        elif path == "/diag":
+            link = _link
+            body = {
+                "meld_enabled": bool((CONFIG.get("meld") or {}).get("enabled")),
+                "meld_linked": bool(link and link.ws is not None),
+                "meld_methods": len(link._methods) if link else 0,
+                "meld_session_items": len(link._items()) if link else 0,
+                "meld_layer": (CONFIG.get("meld") or {}).get("layer_name"),
+                "meld_layer_found": bool(
+                    link and link._find("layer",
+                                        (CONFIG.get("meld") or {}).get("layer_name"))[0]),
+            }
+            self._send(200, "application/json",
+                       json.dumps(body, indent=2).encode("utf-8"))
+
         elif path == "/config":
             body = json.dumps({
                 "layout": CONFIG.get("layout", "bar"),
@@ -363,8 +383,10 @@ def main():
     print(f"  source  : {CONFIG['source_filter'] or '(any player)'}")
     print("Paste the overlay URL into a Meld Studio Web layer. Ctrl+C to stop.")
 
+    global _link
     meld_cfg = CONFIG.get("meld") or {}
     link = MeldLink(meld_cfg, f"http://127.0.0.1:{port}/", print)
+    _link = link
     if meld_cfg.get("enabled"):
         print(f"  meld    : {meld_cfg.get('url', 'ws://127.0.0.1:13376')} "
               f"-> layer {meld_cfg.get('layer_name')}")
