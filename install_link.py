@@ -16,11 +16,13 @@ import argparse
 import json
 import urllib.parse
 
+# Layer sizes. Each one is big enough for the *expanded* card that shows for a
+# few seconds on a track change, so the pop-in is never clipped.
 LAYOUTS = {
-    "bar": (380, 90),
+    "bar": (380, 120),
     "card": (420, 140),
-    "text": (480, 40),
-    "vertical": (240, 320),
+    "text": (480, 44),
+    "vertical": (240, 344),
 }
 
 META = {
@@ -31,9 +33,7 @@ META = {
 
 def build(port=8752, layout="bar", name="Now Playing", kind="browser", url=None):
     width, height = LAYOUTS.get(layout, LAYOUTS["bar"])
-    url = url or f"http://127.0.0.1:{port}/"
-    if layout != "bar":
-        url += f"?layout={layout}"
+    url = url or f"http://127.0.0.1:{port}/?layout={layout}"
 
     layer = {
         # the overlay is silent; keep it out of the mix by default

@@ -43,13 +43,13 @@ If you would rather edit a file, it is all in `config.json` next to the executab
 
 | layout | what it is | layer size |
 |---|---|---|
-| `bar` | album art, title, artist, thin progress bar | 380 × 90 |
+| `bar` | album art, title, artist, thin progress bar | 380 × 120 |
 | `card` | bigger art, album line, elapsed / total | 420 × 140 |
-| `text` | one line, `Title — Artist`, no art | 480 × 40 |
-| `vertical` | stacked art over centred text | 240 × 320 |
+| `text` | one line, `Title — Artist`, no art | 480 × 44 |
+| `vertical` | stacked art over centred text | 240 × 344 |
 
-On every track change the card briefly expands and then settles back. Set pop-in to `0`
-to turn that off.
+On every track change the card briefly expands and then settles back — the sizes above
+leave room for that, so nothing gets clipped. Set pop-in to `0` to turn it off.
 
 You can also override the layout per layer with a query string, so several Meld layers
 can share one server:

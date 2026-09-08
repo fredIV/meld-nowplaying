@@ -151,6 +151,10 @@
   body[data-layout="vertical"] #title,
   body[data-layout="vertical"] #artist { text-align: center; }
 
+  /* the text layout never expands, even if pop-in is forced on */
+  body[data-layout="text"] #card.popin #album,
+  body[data-layout="text"] #card.popin #times { display: none; max-height: 0; opacity: 0; }
+
   /* ---- pop-in: briefly expand on a new track, then settle ---- */
   #card.popin { --art: var(--popin-art, 96px); }
   #card.popin #album { max-height: 20px; opacity: 1; }

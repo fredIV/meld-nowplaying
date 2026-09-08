@@ -13,6 +13,16 @@ try. Nothing else about the overlay changed.
 If you already added a blank layer from v0.1.0, delete it and click **Add to Meld**
 again — or just set *Browser size* on that layer to match its dimensions.
 
+### Two more fixes from testing the other layouts
+
+- **The link now pins the layout on the URL.** Before, the `bar` link left it off and the
+  layer inherited whatever layout was saved in settings — so if you had switched to
+  `card`, the bar-sized layer rendered the card and got clipped.
+- **Layer sizes now leave room for the pop-in.** The card expands for a few seconds on a
+  track change, and `bar` and `vertical` were sized to the settled state, so the expanded
+  version was cut off. New sizes: bar 380×120, card 420×140, text 480×44,
+  vertical 240×344.
+
 ### Also in this build
 
 - The bundled `config.json` no longer ships with the Meld API link switched on. Running
