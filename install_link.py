@@ -42,14 +42,19 @@ def build(port=8752, layout="bar", name="Now Playing", kind="browser", url=None)
             "excludedFromVOD": False, "gain": 1, "global": False,
             "monitoring": False, "muted": True, "type": 0, "version": 2,
         },
+        # the page viewport. Without these Meld defaults to 1280x720 and
+        # squashes that whole viewport into the layer box, which reads as a
+        # blank layer.
+        "browserWidth": width,
+        "browserHeight": height,
         "clip": True,
         "effects": [],
         "fitmentMode": 2,
         "forceHideViewportViews": False,
-        "hasLoadedSourcePreviously": True,
+        "hasLoadedSourcePreviously": False,
         "height": height,
         "isLocked": False,
-        "keepAspectRatio": False,
+        "keepAspectRatio": True,
         "meta": dict(META),
         "name": name,
         "offsetX": 0, "offsetY": 0, "opacity": 1,

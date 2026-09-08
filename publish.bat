@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 set REPO=fredIV/meld-nowplaying
-set TAG=v0.1.0
+set TAG=v0.1.1
 
 echo Publishing %REPO% ...
 echo.
@@ -32,7 +32,7 @@ if not exist "dist\meld-nowplaying.exe" (
   pause & exit /b 1
 )
 
-gh release create %TAG% "dist\meld-nowplaying.exe" --draft ^
+gh release create %TAG% "meld-nowplaying-%TAG%-windows.zip" --draft ^
    --title "meld-nowplaying %TAG%" --notes-file RELEASE_NOTES.md || (
   echo Could not create the draft release. & pause & exit /b 1
 )
